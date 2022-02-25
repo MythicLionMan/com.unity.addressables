@@ -524,7 +524,23 @@ namespace UnityEngine.ResourceManagement.Util
         {
             if (PlatformCanLoadLocallyFromUrlPath() && File.Exists(path))
                 return false;
+            if (PlatformCanLoadLocallyFromAssetCatalogUrl() && (path?.StartsWith("res://") ?? false))
+                return false;
             return path != null && path.Contains("://");
+        }
+
+        /// <summary>
+        /// Checks if the current platform can use "res://" urls to load assets from an asset catalog.
+        /// </summary>
+        /// <returns>True if the current platform can use res:// urls for local loads, false otherwise.</returns>
+        private static bool PlatformCanLoadLocallyFromAssetCatalogUrl()
+        {
+            List<RuntimePlatform> platformsThatUseAssetCatalogs = new List<RuntimePlatform>()
+            {
+                RuntimePlatform.IPhonePlayer,
+                RuntimePlatform.OSXPlayer
+            };
+            return platformsThatUseAssetCatalogs.Contains((Application.platform));
         }
 
         /// <summary>
