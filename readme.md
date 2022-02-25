@@ -1,6 +1,6 @@
 # Addressables - Multi-Catalog
 
-The Addressables package by Unity provides a novel way of managing and packing assets for your build. It replaces the Asset Bundle system, and in certain ways, also seeks to dispose of the Resources folder.
+The Addressables package by Unity provides a novel way of managing and packing assets for your build. It builds on top of the Asset Bundle system, and in certain ways, also seeks to dispose of the Resources folder.
 
 This variant forked from the original Addressables-project adds support for building your assets across several catalogs in one go and provides several other benefits, e.g. reduced build times and build size, as well as keeping the buildcache intact.
 
