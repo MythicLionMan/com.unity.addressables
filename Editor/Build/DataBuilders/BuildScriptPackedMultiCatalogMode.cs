@@ -71,11 +71,23 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 				{
 					if (loc.ResourceType == typeof(IAssetBundleResource))
 					{
-						string filePath = Path.GetFullPath(loc.InternalId.Replace("{UnityEngine.AddressableAssets.Addressables.RuntimePath}", Addressables.BuildPath));
-						string runtimeLoadPath = preferredCatalog.CatalogContentGroup.RuntimeLoadPath + "/" + Path.GetFileName(filePath);
+						string fileName;
+						if (loc.InternalId.StartsWith("res://"))
+						{							
+							// The fileName is needed to generate the runtime path. No files are added to preferredCatalog, since
+							// a res:// reference is stored in an iOS AssetCatalog, and is not managed by the catalog.
+							fileName = Path.GetFileName(loc.InternalId);
+						}
+						else
+						{
+							string filePath = Path.GetFullPath(loc.InternalId.Replace("{UnityEngine.AddressableAssets.Addressables.RuntimePath}", Addressables.BuildPath));
+							fileName = Path.GetFileName(filePath);
+
+							preferredCatalog.Files.Add(filePath);
+						}
+						string runtimeLoadPath = Path.Combine(preferredCatalog.CatalogContentGroup.RuntimeLoadPath, fileName);
 						runtimeLoadPath = profileSettings.EvaluateString(profileId, runtimeLoadPath);
 
-						preferredCatalog.Files.Add(filePath);
 						preferredCatalog.BuildInfo.Locations.Add(new ContentCatalogDataEntry(typeof(IAssetBundleResource), runtimeLoadPath, loc.Provider, loc.Keys, loc.Dependencies, loc.Data));
 					}
 					else
@@ -152,13 +164,16 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 					continue;
 				}
 
-				var bundlePath = aaContext.Settings.profileSettings.EvaluateString(aaContext.Settings.activeProfileId, setup.CatalogContentGroup.BuildPath);
-				Directory.CreateDirectory(bundlePath);
-
-				FileMoveOverwrite(Path.Combine(Addressables.BuildPath, setup.BuildInfo.JsonFilename), Path.Combine(bundlePath, setup.BuildInfo.JsonFilename));
-				foreach (var file in setup.Files)
+				if (setup.CatalogContentGroup.BuildPath != null && setup.CatalogContentGroup.BuildPath != "")
 				{
-					FileMoveOverwrite(file, Path.Combine(bundlePath, Path.GetFileName(file)));
+					var bundlePath = aaContext.Settings.profileSettings.EvaluateString(aaContext.Settings.activeProfileId, setup.CatalogContentGroup.BuildPath);
+					Directory.CreateDirectory(bundlePath);
+
+					FileMoveOverwrite(Path.Combine(Addressables.BuildPath, setup.BuildInfo.JsonFilename), Path.Combine(bundlePath, setup.BuildInfo.JsonFilename));
+					foreach (var file in setup.Files)
+					{
+						FileMoveOverwrite(file, Path.Combine(bundlePath, Path.GetFileName(file)));
+					}
 				}
 			}
 
