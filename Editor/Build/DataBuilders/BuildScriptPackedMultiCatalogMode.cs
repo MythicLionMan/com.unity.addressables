@@ -7,7 +7,10 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.Initialization;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.ResourceManagement.ResourceProviders;
-
+#if UNITY_IOS || UNITY_MACOS
+using Resource = UnityEditor.iOS.Resource;
+using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+#endif
 namespace UnityEditor.AddressableAssets.Build.DataBuilders
 {
 	/// <summary>
@@ -208,6 +211,84 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 			}
 		}
 
+// TODO I'd like this to be in a different file, but I need access to certain private members
+#if UNITY_IOS || UNITY_MACOS
+		public Resource[] CollectResources()
+		{
+			// The catalog for each group is a Resource
+			var catalogs = catalogSetups.Select(setup => (setup, "AssetCatalog.bundle", setup.BuildInfo.JsonFilename)).ToArray();
+			// Asset bundles that are referenced with res:// in each group are variant resources
+			var variants = catalogSetups.SelectMany(setup => 
+				setup.BuildInfo
+						.Locations
+						.Select(location => (setup, location.InternalId, location.InternalId))
+						.Where(t => t.Item2.StartsWith("res://"))
+			).ToArray();
+
+			// Combine the catalogs and the variant assets and normalize any paths
+			var allVariants = catalogs.Concat(variants)
+									  .Select(t => {
+										var name = t.Item2;
+										if (name.StartsWith("res://")) name = name.Remove(0, 6);
+											var fileName = t.Item3;
+											if (fileName.StartsWith("res://")) fileName = fileName.Remove(0, 6);
+											return (
+												t.Item1, 
+												name,
+												Path.Combine(t.Item1.CatalogContentGroup.BuildPath, fileName)
+											);
+									  }).ToArray();
+
+			// The paths of all bundles for which there is a variant. These will all be generated as variant resources,
+			// so the normal resource path should not create any instances of these.
+			var variantBundles = allVariants.Select(t => t.Item3);
+
+			// Pivot allVariants to get a list of the catalogs associated with each address
+			var catalogsByAddress = allVariants
+				.GroupBy(t => t.Item2)
+				.Select(group => (group.Key, new HashSet<(CatalogSetup, string)>(group.Select(g => (g.Item1, g.Item3)))))
+				.ToArray();
+			
+			// Map each group to a DeviceRequirements
+			var requirements = catalogSetups.Select(setup => setup.CatalogContentGroup)
+			                                .ToDictionary(group => group.CatalogName, group => group.DeviceRequirement);
+
+			// Map the definitions to the variant Resources
+			var variantResources = catalogsByAddress.Select(t => {
+				Resource resource = new Resource(t.Item1);
+				foreach (var variantInfo in t.Item2) {
+					CatalogSetup variant = variantInfo.Item1;
+					string path = variantInfo.Item2;
+					var variantName = variant.BuildInfo.Identifier;
+					resource = resource.BindVariant(path, requirements[variantName]);
+				}
+				return resource;
+			}).ToArray();
+
+			AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+
+			// Find all unique bundle build paths
+			var allBuildPaths = catalogSetups.Select(setup => settings.profileSettings.EvaluateString(settings.activeProfileId, setup.CatalogContentGroup.BuildPath))
+			             					 .Append(settings.profileSettings.EvaluateString(settings.activeProfileId, Addressables.BuildPath))
+											 .Distinct()
+											 .ToArray();
+
+			// Search all build paths for all bundles
+			var bundles = AssetDatabase.FindAssets("", allBuildPaths);
+
+			// Create resource definitions for the non variant resources, map them to resource objects
+			// and then combine them with the variant resources
+			return bundles.Select(guid => AssetDatabase.GUIDToAssetPath(guid))
+						  .Except(variantBundles)           // filter out any bundles that have a variant
+						  .Select(bundlePath => {
+						  	  var name = Path.GetFileName(bundlePath);
+							  //Debug.Log($"Non variant resource = {name}:{bundlePath}");
+							  return new Resource(name, bundlePath);
+						  })
+						  .Concat(variantResources)			// Append the variant resources
+						  .ToArray();		
+		}
+#endif
 		private class CatalogSetup
 		{
 			public readonly ExternalCatalogSetup CatalogContentGroup = null;

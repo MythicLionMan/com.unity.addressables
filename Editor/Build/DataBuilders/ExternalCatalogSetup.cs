@@ -15,6 +15,32 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 	{
 		[SerializeField, Tooltip("Assets groups that belong to this catalog. Entries found in these will get extracted from the default catalog.")]
 		private List<AddressableAssetGroup> assetGroups = new List<AddressableAssetGroup>();
+#if UNITY_IOS || UNITY_MACOS
+		[SerializeField, Tooltip("A set of key/value pairs for configuring an iOSDeviceRequirement.")]
+		private List<RequirementKeyValuePair> deviceProperties = new List<RequirementKeyValuePair>();
+
+		[System.Serializable]
+		public struct RequirementKeyValuePair {
+			[SerializeField]
+			private string Key;
+			[SerializeField]
+			private string Value;
+
+			public void AddToRequirement(iOSDeviceRequirement requirement) {
+				requirement.values.Add(Key, Value);
+			}
+		}
+
+		public iOSDeviceRequirement DeviceRequirement
+		{
+			get
+			{
+				var requirement = new iOSDeviceRequirement();
+				foreach (var pair in deviceProperties) pair.AddToRequirement(requirement);
+				return requirement;
+			}
+		}
+#endif
 		[SerializeField, Tooltip("Build path for the produced files associated with this catalog.")]
 		private string buildPath = string.Empty;
 		[SerializeField, Tooltip("Runtime load path for assets associated with this catalog.")]
