@@ -518,6 +518,42 @@ namespace UnityEngine.AddressableAssets
 
         public AsyncOperationHandle<IResourceLocator> LoadContentCatalogAsync(string catalogPath, bool autoReleaseHandle = true, string providerSuffix = null)
         {
+            // There's an issue loading content catalogs from an AssetBundle stored in an iOS AssetCatalog. This is a
+            // hack to work around the issue. I'm sure that there's a more elegant way to do this, invovling a ChainOperaiton
+            // to open the bundle, read out the json, and then apply the catalog, but I don't understand the architecture well
+            // enough to implement that at this point.
+            //
+            // This hack works by detecting the res:// that indicates a resource in an AssetCatalog and using AssetBundle APIs
+            // to read the bundle and save it to a temporary file. The normal API can then be used to read this regular file.
+            if (catalogPath.StartsWith("res://"))
+            {
+                string tempPath = Path.Combine(Application.temporaryCachePath, "AdditionalCatalog.json");
+                // If there is an existing cached catalog file, delete it
+                if (File.Exists(tempPath)) File.Delete(tempPath);
+
+                var catalogBundle = AssetBundle.LoadFromFile("res://AssetCatalog");
+                if (catalogBundle)
+                {
+                    // Extract all assets from the bundle
+                    var assets = catalogBundle.LoadAllAssets();
+
+                    // Save the first text asset in the catalog to tempPath
+                    foreach (var asset in assets) {
+                        var catalogData = asset as TextAsset;
+                        if (catalogData)
+                        {
+                            StreamWriter writer = new StreamWriter(tempPath, true);
+                            writer.Write(catalogData.text);
+                            writer.Close();
+                            Debug.Log($"CCR Loaded asset name data: {catalogData}");
+                            break;
+                        }
+                    }
+                }
+                
+                return LoadContentCatalogAsync(tempPath, autoReleaseHandle, providerSuffix);
+            }
+
             string catalogHashPath = catalogPath.Replace(".json", ".hash");
             var catalogLoc = CreateCatalogLocationWithHashDependencies(catalogPath, catalogHashPath);
             if (ShouldChainRequest)

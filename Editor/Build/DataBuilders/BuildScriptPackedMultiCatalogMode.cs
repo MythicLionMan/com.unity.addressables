@@ -172,7 +172,10 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 					var bundlePath = aaContext.Settings.profileSettings.EvaluateString(aaContext.Settings.activeProfileId, setup.CatalogContentGroup.BuildPath);
 					Directory.CreateDirectory(bundlePath);
 
-					FileMoveOverwrite(Path.Combine(Addressables.BuildPath, setup.BuildInfo.JsonFilename), Path.Combine(bundlePath, setup.BuildInfo.JsonFilename));
+					var bundleFileName = setup.BuildInfo.JsonFilename;
+					if (aaContext.Settings.BundleLocalCatalog) bundleFileName = bundleFileName.Replace(".json", ".bundle");
+
+					FileMoveOverwrite(Path.Combine(Addressables.BuildPath, bundleFileName), Path.Combine(bundlePath, bundleFileName));
 					foreach (var file in setup.Files)
 					{
 						FileMoveOverwrite(file, Path.Combine(bundlePath, Path.GetFileName(file)));
@@ -215,8 +218,10 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 #if UNITY_IOS || UNITY_MACOS
 		public Resource[] CollectResources()
 		{
-			// The catalog for each group is a Resource
-			var catalogs = catalogSetups.Select(setup => (setup, "AssetCatalog.bundle", setup.BuildInfo.JsonFilename)).ToArray();
+			// The catalog for each group is a Resource. Note that this assumes that the catalog is in a bundle.
+			// If it is not, then the catalog can't be loaded.
+			var catalogs = catalogSetups.Select(setup => (setup, "AssetCatalog", setup.BuildInfo.JsonFilename.Replace(".json", ".bundle"))).ToArray();
+			
 			// Asset bundles that are referenced with res:// in each group are variant resources
 			var variants = catalogSetups.SelectMany(setup => 
 				setup.BuildInfo
