@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor.AddressableAssets.Settings;
@@ -218,6 +218,19 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 #if UNITY_IOS || UNITY_MACOS
 		public Resource[] CollectResources()
 		{
+			// In typical use an AssetCatalog has one or more variant for each resource, and slicing rules determine
+			// which one is used. Because the addressables index is 
+			// The variant index references each resource variant using a unique name. So the highres and lowres
+			// variants of the same texture will have two separate entries in the asset catalog. This means that
+			// each resource returned by the resource collector will be returning Resource instances with one valid
+			// variant, and one 'empty' varaint. If the 'empty' variant is not initialized then XCode will detect
+			// this when it generates the catalog and always include the other variant, despite the fact that the
+			// bundle at that address will never be requested when the 'empty' variant is returned by slicing.
+			// To circumvent this an empty file is used as the variant for these 'unavailable' resources. If the
+			// empty file does not exist this will create it.
+			string emptyPath = Path.Combine(Application.temporaryCachePath, "EmptyFile");
+            LocalExtensions.EnsureFileExists(emptyPath);
+			
 			// The catalog for each group is a Resource. Note that this assumes that the catalog is in a bundle.
 			// If it is not, then the catalog can't be loaded.
 			var catalogs = catalogSetups.Select(setup => (setup, "AssetCatalog", setup.BuildInfo.JsonFilename.Replace(".json", ".bundle"))).ToArray();
@@ -251,7 +264,7 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 			// Pivot allVariants to get a list of the catalogs associated with each address
 			var catalogsByAddress = allVariants
 				.GroupBy(t => t.Item2)
-				.Select(group => (group.Key, new HashSet<(CatalogSetup, string)>(group.Select(g => (g.Item1, g.Item3)))))
+				.Select(group => (group.Key, group.ToDictionary(g => g.Item1, g => g.Item3)))
 				.ToArray();
 			
 			// Map each group to a DeviceRequirements
@@ -261,12 +274,27 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 			// Map the definitions to the variant Resources
 			var variantResources = catalogsByAddress.Select(t => {
 				Resource resource = new Resource(t.Item1);
-				foreach (var variantInfo in t.Item2) {
-					CatalogSetup variant = variantInfo.Item1;
-					string path = variantInfo.Item2;
+				var resourceVariants = t.Item2;
+			   #if true
+				foreach (var variant in catalogSetups) {
+					var variantName = variant.BuildInfo.Identifier;
+					if (resourceVariants.ContainsKey(variant)) {
+						string path = resourceVariants[variant];
+						resource = resource.BindVariant(path, requirements[variantName]);
+					} else {
+						// There is no variant for this catalog. Generate an empty variant
+						// so that the AssetCatalog doesn't contain the alternate.
+						resource = resource.BindVariant(emptyPath, requirements[variantName]);
+					}
+				}
+			   #else
+				foreach (var variantInfo in resourceVariants) {
+					CatalogSetup variant = variantInfo.Key;
+					string path = variantInfo.Value;
 					var variantName = variant.BuildInfo.Identifier;
 					resource = resource.BindVariant(path, requirements[variantName]);
 				}
+			   #endif
 				return resource;
 			}).ToArray();
 
@@ -321,6 +349,16 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 				this.CatalogContentGroup = buildCatalog;
 				BuildInfo = new ContentCatalogBuildInfo(buildCatalog.CatalogName, buildCatalog.CatalogName + ".json");
 				BuildInfo.Register = false;
+			}
+		}
+
+		private static class LocalExtensions {
+			public static void EnsureFileExists(string path) {
+                // If the file exists return
+                if (File.Exists(path)) return;
+
+				StreamWriter writer = new StreamWriter(path, true);
+				writer.Close();				
 			}
 		}
 	}
