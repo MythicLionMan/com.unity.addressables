@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEditor.AddressableAssets.Settings;
@@ -13,6 +13,14 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 	[CreateAssetMenu(menuName = "Addressables/new External Catalog", fileName = "newExternalCatalogSetup")]
 	public class ExternalCatalogSetup : ScriptableObject
 	{
+        /// <summary>
+        /// The catalog variant identifier. Multiple catalogs that provide the same assets should share
+        /// a variant identifier.
+        /// </summary>
+		[SerializeField, Tooltip("If multiple catalogs provide assets that are variants of one another they should all share a variant group.")]
+		private string VariantGroup;
+        public string VariantName => (VariantGroup == null) || (VariantGroup == "") ? "AssetCatalog" : VariantGroup;
+
 		[SerializeField, Tooltip("Assets groups that belong to this catalog. Entries found in these will get extracted from the default catalog.")]
 		private List<AddressableAssetGroup> assetGroups = new List<AddressableAssetGroup>();
 #if UNITY_IOS || UNITY_MACOS

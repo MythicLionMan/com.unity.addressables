@@ -232,10 +232,11 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
             LocalExtensions.EnsureFileExists(emptyPath);
 			
 			// The catalog for each group is a Resource. Note that this assumes that the catalog is in a bundle.
-			// If it is not, then the catalog can't be loaded.
-			var catalogs = catalogSetups.Select(setup => (setup, "AssetCatalog", setup.BuildInfo.JsonFilename.Replace(".json", ".bundle"))).ToArray();
+			// If it is not, then the catalog can't be loaded. [(CatalogSetup, VariantName, FileName)]
+			var catalogs = catalogSetups.Select(setup => (setup, setup.CatalogContentGroup.VariantName, setup.BuildInfo.JsonFilename.Replace(".json", ".bundle"))).ToArray();
 			
-			// Asset bundles that are referenced with res:// in each group are variant resources
+			// Asset bundles that are referenced with res:// in each group are variant resources 
+			// [(CatalogSetup, URL, URL)]
 			var variants = catalogSetups.SelectMany(setup => 
 				setup.BuildInfo
 						.Locations
@@ -243,7 +244,8 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 						.Where(t => t.Item2.StartsWith("res://"))
 			).ToArray();
 
-			// Combine the catalogs and the variant assets and normalize any paths
+			// Combine the catalogs and the variant assets and normalize any paths 
+			// [(CatalogSetup, CatalogName, AssetDBPath)]
 			var allVariants = catalogs.Concat(variants)
 									  .Select(t => {
 										var name = t.Item2;
@@ -259,39 +261,56 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 
 			// The paths of all bundles for which there is a variant. These will all be generated as variant resources,
 			// so the normal resource path should not create any instances of these.
+			// [AssetDBPath]
 			var variantBundles = allVariants.Select(t => t.Item3);
 
 			// Pivot allVariants to get a list of the catalogs associated with each address
+			// {CatalogName: [CatalogSetup]}
 			var catalogsByAddress = allVariants
 				.GroupBy(t => t.Item2)
 				.Select(group => (group.Key, group.ToDictionary(g => g.Item1, g => g.Item3)))
 				.ToArray();
 			
-			// Map each group to a DeviceRequirements
+			// Map each catalog to a DeviceRequirements
+			// { CatalogName: [DeviceRequiements]}
 			var requirements = catalogSetups.Select(setup => setup.CatalogContentGroup)
 			                                .ToDictionary(group => group.CatalogName, group => group.DeviceRequirement);
+
+			// Map each variantName to a list of all CatalogSetups for the variant 
+			// { VariantName: [CatalogSetup] }
+			var variantCatalogs = catalogSetups.Select(setup => setup.CatalogContentGroup.VariantName)
+								 		  	   .Distinct()
+			                                   .ToDictionary(variantName => variantName, variantName => {
+											  		return catalogSetups.Where(setup => setup.CatalogContentGroup.VariantName == variantName)
+																        .ToArray();
+											   });
 
 			// Map the definitions to the variant Resources
 			var variantResources = catalogsByAddress.Select(t => {
 				Resource resource = new Resource(t.Item1);
 				var resourceVariants = t.Item2;
 			   #if true
-				foreach (var variant in catalogSetups) {
-					var variantName = variant.BuildInfo.Identifier;
+			    // Create a variant for each entry in this variantGroup
+				var variantGroup = resourceVariants.FirstOrDefault().Key.CatalogContentGroup.VariantName;
+				foreach (var variant in variantCatalogs[variantGroup]) {
+					var variantRequirements = requirements[variant.BuildInfo.Identifier];
 					if (resourceVariants.ContainsKey(variant)) {
 						string path = resourceVariants[variant];
-						resource = resource.BindVariant(path, requirements[variantName]);
+						resource = resource.BindVariant(path, variantRequirements);
 					} else {
 						// There is no variant for this catalog. Generate an empty variant
 						// so that the AssetCatalog doesn't contain the alternate.
-						resource = resource.BindVariant(emptyPath, requirements[variantName]);
+						resource = resource.BindVariant(emptyPath, variantRequirements);
 					}
 				}
 			   #else
+			    // Create a variant for each resource associated with tis variant. This will
+				// not create variants for every catalog in the variant group. The 'missing' 
+				// variants can cause slicing to return unexpected results.
 				foreach (var variantInfo in resourceVariants) {
 					CatalogSetup variant = variantInfo.Key;
 					string path = variantInfo.Value;
-					var variantName = variant.BuildInfo.Identifier;
+					var variantName = variant.CatalogContentGroup.VariantName;
 					resource = resource.BindVariant(path, requirements[variantName]);
 				}
 			   #endif

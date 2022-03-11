@@ -527,11 +527,12 @@ namespace UnityEngine.AddressableAssets
             // to read the bundle and save it to a temporary file. The normal API can then be used to read this regular file.
             if (catalogPath.StartsWith("res://"))
             {
-                string tempPath = Path.Combine(Application.temporaryCachePath, "AdditionalCatalog.json");
+                string catalogName = Path.GetFileNameWithoutExtension(catalogPath) + "_TemporaryCatalog.json";
+                string tempPath = Path.Combine(Application.temporaryCachePath, catalogName);
                 // If there is an existing cached catalog file, delete it
                 if (File.Exists(tempPath)) File.Delete(tempPath);
 
-                var catalogBundle = AssetBundle.LoadFromFile("res://AssetCatalog");
+                var catalogBundle = AssetBundle.LoadFromFile(catalogPath);
                 if (catalogBundle)
                 {
                     // Extract all assets from the bundle
@@ -545,7 +546,6 @@ namespace UnityEngine.AddressableAssets
                             StreamWriter writer = new StreamWriter(tempPath, true);
                             writer.Write(catalogData.text);
                             writer.Close();
-                            Debug.Log($"CCR Loaded asset name data: {catalogData}");
                             break;
                         }
                     }
