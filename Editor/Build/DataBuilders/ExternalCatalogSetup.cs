@@ -13,6 +13,7 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 	[CreateAssetMenu(menuName = "Addressables/new External Catalog", fileName = "newExternalCatalogSetup")]
 	public class ExternalCatalogSetup : ScriptableObject
 	{
+#if ADDRESSABLE_IOS_RESOURCES
         /// <summary>
         /// The catalog variant identifier. Multiple catalogs that provide the same assets should share
         /// a variant identifier.
@@ -20,10 +21,10 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 		[SerializeField, Tooltip("If multiple catalogs provide assets that are variants of one another they should all share a variant group.")]
 		private string VariantGroup;
         public string VariantName => (VariantGroup == null) || (VariantGroup == "") ? "AssetCatalog" : VariantGroup;
-
+#endif
 		[SerializeField, Tooltip("Assets groups that belong to this catalog. Entries found in these will get extracted from the default catalog.")]
 		private List<AddressableAssetGroup> assetGroups = new List<AddressableAssetGroup>();
-#if UNITY_IOS || UNITY_MACOS
+#if ADDRESSABLE_IOS_RESOURCES
 		[SerializeField, Tooltip("A set of key/value pairs for configuring an iOSDeviceRequirement.")]
 		private List<RequirementKeyValuePair> deviceProperties = new List<RequirementKeyValuePair>();
 

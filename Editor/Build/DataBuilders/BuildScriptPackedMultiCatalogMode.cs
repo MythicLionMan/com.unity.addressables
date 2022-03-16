@@ -7,7 +7,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.Initialization;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.ResourceManagement.ResourceProviders;
-#if UNITY_IOS || UNITY_MACOS
+#if ADDRESSABLE_IOS_RESOURCES
 using Resource = UnityEditor.iOS.Resource;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 #endif
@@ -215,7 +215,7 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 		}
 
 // TODO I'd like this to be in a different file, but I need access to certain private members
-#if UNITY_IOS || UNITY_MACOS
+#if ADDRESSABLE_IOS_RESOURCES
 		public Resource[] CollectResources()
 		{
 			// The variant index references each resource variant using a unique name. So the highres and lowres
