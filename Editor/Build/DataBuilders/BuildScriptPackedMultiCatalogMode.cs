@@ -218,8 +218,6 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 #if UNITY_IOS || UNITY_MACOS
 		public Resource[] CollectResources()
 		{
-			// In typical use an AssetCatalog has one or more variant for each resource, and slicing rules determine
-			// which one is used. Because the addressables index is 
 			// The variant index references each resource variant using a unique name. So the highres and lowres
 			// variants of the same texture will have two separate entries in the asset catalog. This means that
 			// each resource returned by the resource collector will be returning Resource instances with one valid
@@ -276,14 +274,8 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 			var requirements = catalogSetups.Select(setup => setup.CatalogContentGroup)
 			                                .ToDictionary(group => group.CatalogName, group => group.DeviceRequirement);
 
-			// Map each variantName to a list of all CatalogSetups for the variant 
 			// { VariantName: [CatalogSetup] }
-			var variantCatalogs = catalogSetups.Select(setup => setup.CatalogContentGroup.VariantName)
-								 		  	   .Distinct()
-			                                   .ToDictionary(variantName => variantName, variantName => {
-											  		return catalogSetups.Where(setup => setup.CatalogContentGroup.VariantName == variantName)
-																        .ToArray();
-											   });
+			var variantCatalogs = this.variantCatalogs;
 
 			// Map the definitions to the variant Resources
 			var variantResources = catalogsByAddress.Select(t => {
@@ -339,6 +331,61 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 						  })
 						  .Concat(variantResources)			// Append the variant resources
 						  .ToArray();		
+		}
+
+		// An index that maps variantNames to an array of all catalog setups with that variantName.
+		// { VariantName: [CatalogSetup] }
+		private Dictionary<string, CatalogSetup[]> variantCatalogs => catalogSetups
+						.Select(setup => setup.CatalogContentGroup.VariantName)
+						.Distinct()
+						.ToDictionary(variantName => variantName, variantName => {
+							return catalogSetups.Where(setup => setup.CatalogContentGroup.VariantName == variantName)
+												.ToArray();
+						});
+
+		// Returns a diagnostic report of extra catalogs that are set up as variant groups.
+		// If multiple catalogs are in a variant group, each catalog should have the same 
+		// asset addresses. Otherwise, different target achitectures will behave differently,
+		// and the exported asset catalog may be corrupt.
+		// 
+		// This property will return a dictionary with a key for every asset catalog that references a
+		// different set of assets than the other members of the same variant group. The values
+		// of the Dictionary will be the addresses that are different in this catalog vs the other
+		// members of the group.
+		//
+		// By checking this value during the build process issues with the variant catalog
+		// addresses can be diagnosed. If the returned dictionary is empty then no issues were
+		// found.
+		public Dictionary<string, HashSet<string>> variantAddressMismatches {
+			get {
+				IEnumerable<string> AddressesForSetup(CatalogSetup setup) {
+					return setup.BuildInfo.Locations.Select(location => {
+						// The bundle locations are expected to vary, so exclude them from the
+						// address list
+						if (location.InternalId.StartsWith("res://")) { return (string)""; }
+						if (location.Keys.Count > 0) return (string)location.Keys[0];
+						return (string)"";
+					}).Where(address => address != "");
+				}
+
+				// Find the union of all addresses associated with each variantGroup
+				// { VariantName: [AssetAddress]}
+				var variantAddresses = variantCatalogs.ToDictionary(kv => kv.Key, kv => {
+					var catalogSetups = kv.Value;
+					return new HashSet<string>(catalogSetups.SelectMany(AddressesForSetup));
+				});
+
+				// Find any differences between variantAddresses and the addresses used by any 
+				// individual group
+				return catalogSetups.ToDictionary(setup => setup.CatalogContentGroup.CatalogName, setup => {
+					var catalogAddresses = new HashSet<string>(AddressesForSetup(setup));
+					if (variantAddresses.ContainsKey(setup.CatalogContentGroup.VariantName)) {
+						catalogAddresses.SymmetricExceptWith(variantAddresses[setup.CatalogContentGroup.VariantName]);
+					}
+					return catalogAddresses;
+				}).Where(t => t.Value.Count() > 0)
+				  .ToDictionary(t => t.Key, t => t.Value);
+			}
 		}
 #endif
 		private class CatalogSetup
