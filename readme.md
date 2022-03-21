@@ -104,21 +104,21 @@ In a traditional unity Addressable build the bundles are stored in the Library f
 
 1. In order to store the Addresable catalogs (indexes) in the iOS Asset Catalog they need to be in an asset bundle. This is enabled in the Addressable Asset Settings. The API property is 'm_BundleLocalCatalog', but perversely the option to select is "Compress Local Catalog". Select this option.
 2. A new Addressables profile is needed to configure where bundles are built to and loaded from. Go to 'Window > Asset Management > Addressables > Profiles' and select 'Create > Profile'. Most of the settings are the same as the 'Default' profile, but LocalBuildPath should be set to the folder in the AssetDatabase where the bundles will be located. For instance, "Assets/AddressableAssetsData/GeneratedBundles". LocalLoadPath should be set to "res://" which directs the addressable system to load bundles from the asset catalog.
-3. Create catalogs for your variant assets. Each catalog in a variant group should have the same "variant group" identifier. Each catalog  should contain different versions of assets with the same address. For example, one catalog might have low resolution textures and another might have high resolution, but the atlases in both groups will have the same addresses.
+3. Create catalogs for your variant assets. Each catalog in a variant group should have the same "variant group" identifier. Each catalog  should contain different versions of assets with the same address. For example, one catalog might have low resolution textures and another might have high resolution, but the atlases in both groups will have the same addresses. The 'variantAddressMismatches' method can be called at build time to check for mismatches between assets in variant groups.
 4. SpriteAtlases that are included in an Addressable Group that is included in the build should not be included in the build themselves. Check all sprite atlases and ensure that "include in build" is set to false. Not only can including the atlases in the build lead to double inclusion, it can create dependency issues with variants. Either sprites won’t show up, or there will be build errors.
 5. Each variant that you create will require a new AssetCatalog. 
    1. First, setup two or more asset catalogs as described in [setting up multiple catalogs](#Setting up multiple catalogs).
    2. Select variant asset groups for each catalog.
    3. Set 'Build Path' for the group to the same path as the profile created above (eg: "Assets/AddressableAssetsData/GeneratedBundles").
    4. Set 'Runtime Load Path' to "res://"
-   5. Configure the device properties list with Key Value pairs for the Asset Catalog device requirements. It is possible to have one group which has no device requirements (a default group) and then another group that will override in some situations. For example, if one catalog has no requirements and the other contains "memory" => "2GB", the first catalog will be used unless the target device has >= 2GB of memory in which case the second catalog is selected.
+   5. Configure the device properties list with Key Value pairs for the Asset Catalog device requirements. It is possible to have one group which has no device requirements (a default group) and then another group that will override in some situations. UPDATE: While a group with no requirements will work properly on device, slicing during distribution will not handle such groups properly and will result in an asset that cannot be loaded. To work around this I set a memory variant for all groups. For example, if one catalog is intended to be used as a 'default', and another when the device has more than 1GB of memory, I set the 'default' requirement to "memory" => "1GB" and the higher quality requirement to be "memory" => "2GB". The first catalog will be used unless the target device has >= 2GB of memory in which case the second catalog is selected. This only works because the are no longer devices that have < 1GB of memory.
 6. The BuildScriptPacketMultiCatalogResources build script is required in order to create the asset bundle catalog. In addition to using this script, the resources must be collected. Call 
 
    > UnityEditor.iOS.BuildPipeline.collectResources += packedMulti.CollectResources;
    > BuildPipeline.BuildPlayer(buildPlayerOptions);
 
    to setup the build script as the resource collector during the build. The resources will be used to create an iOS asset catalog in the resulting XCode project.
-7. Before your applciation accesses any of the variant resources load the variant catalog with the following call:
+7. Before your applciation accesses any of the variant resources load the variant catalogs for every variang group that was defined with the following call:
 
-   > Addressables.LoadContentCatalogAsync("res://AssetCatalog", true);
+   > Addressables.LoadContentCatalogAsync("res://VariantGroupName", true);
 
