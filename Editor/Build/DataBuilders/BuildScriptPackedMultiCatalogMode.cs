@@ -7,10 +7,6 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.Initialization;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.ResourceManagement.ResourceProviders;
-#if ADDRESSABLE_IOS_RESOURCES
-using Resource = UnityEditor.iOS.Resource;
-using UnityEditor.AddressableAssets.Settings.GroupSchemas;
-#endif
 namespace UnityEditor.AddressableAssets.Build.DataBuilders
 {
 	/// <summary>
@@ -216,7 +212,7 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 
 // TODO I'd like this to be in a different file, but I need access to certain private members
 #if ADDRESSABLE_IOS_RESOURCES
-		public Resource[] CollectResources()
+		public UnityEditor.iOS.Resource[] CollectResources()
 		{
 			// The variant index references each resource variant using a unique name. So the highres and lowres
 			// variants of the same texture will have two separate entries in the asset catalog. This means that
@@ -279,7 +275,7 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 
 			// Map the definitions to the variant Resources
 			var variantResources = catalogsByAddress.Select(t => {
-				Resource resource = new Resource(t.Item1);
+				UnityEditor.iOS.Resource resource = new UnityEditor.iOS.Resource(t.Item1);
 				var resourceVariants = t.Item2;
 			   #if true
 			    // Create a variant for each entry in this variantGroup
@@ -320,15 +316,30 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 			// Search all build paths for all bundles
 			var bundles = AssetDatabase.FindAssets("", allBuildPaths);
 
+			// NOTE This used to be an anonymous closure, but it was causing issues with the AssetImporter.
+			//      To reproduce the issue:
+			//       1. Enable Edit > Project Settings > Editor > Parallel Import
+			//       2. Quit the editor.
+			//       3. Delete everything in PokPok/Logs
+			//       4. Launch the editor
+			//       5. Right click a sprite and select "Reimport"
+			//       6. Examine PokPok/Logs/AssetImportWorker0
+			// Symptoms
+			// At the bottom of the log it will have the following error:
+			// * Assertion at loader.c:345, condition `is_ok (error)' not met, function:mono_field_from_token, Could not resolve field token 0x040004d4, due to: Could not load type of field 'UnityEditor.AddressableAssets.Build.DataBuilders.BuildScriptPackedMultiCatalogMode+<>c:<>9__11_12' (14) due to: Could not load file or assembly 'UnityEditor.iOS.Extensions.Common, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null' or one of its dependencies. assembly:/Users/progersSM/Developer/pokpok/Library/ScriptAssemblies/Unity.Addressables.Editor.dll type:<>c member:(null)
+			// The other symptom is that every 30 seconds the asset import background process relaunches and
+			// fails with an alert warning that it crashed the last time it was opened. The alert is only onscreen
+			// for a split second.
+			UnityEditor.iOS.Resource PathToResource(string bundlePath) {
+		  		var name = Path.GetFileName(bundlePath);
+				//Debug.Log($"Non variant resource = {name}:{bundlePath}");
+				return new UnityEditor.iOS.Resource(name, bundlePath);
+			}
 			// Create resource definitions for the non variant resources, map them to resource objects
 			// and then combine them with the variant resources
 			return bundles.Select(guid => AssetDatabase.GUIDToAssetPath(guid))
 						  .Except(variantBundles)           // filter out any bundles that have a variant
-						  .Select(bundlePath => {
-						  	  var name = Path.GetFileName(bundlePath);
-							  //Debug.Log($"Non variant resource = {name}:{bundlePath}");
-							  return new Resource(name, bundlePath);
-						  })
+						  .Select(PathToResource)
 						  .Concat(variantResources)			// Append the variant resources
 						  .ToArray();		
 		}

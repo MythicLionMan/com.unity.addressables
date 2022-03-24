@@ -5,7 +5,8 @@
         "Unity.ResourceManager",
         "Unity.ScriptableBuildPipeline.Editor",
         "Unity.ScriptableBuildPipeline",
-        "Unity.Services.CCD.Management"
+        "Unity.Services.CCD.Management",
+        "UnityEditor.iOS.Extensions.Common"
     ],
     "optionalUnityReferences": [],
     "includePlatforms": [
