@@ -34,7 +34,6 @@ public class AddressablesPlayerBuildProcessor : BuildPlayerProcessor
         get { return 1; }
     }
     
-    [InitializeOnLoadMethod]
     private static void CleanTemporaryPlayerBuildData()
     {
         RemovePlayerBuildLinkXML(AddressableAssetSettingsDefaultObject.Settings);
@@ -176,7 +175,6 @@ public class AddressablesPlayerBuildProcessor : IPreprocessBuildWithReport, IPos
         CleanTemporaryPlayerBuildData();
     }
 
-    [InitializeOnLoadMethod]
     internal static void CleanTemporaryPlayerBuildData()
     {
         if (Directory.Exists(Addressables.PlayerBuildDataPath))
